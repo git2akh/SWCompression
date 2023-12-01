@@ -25,7 +25,7 @@ struct LZMARangeDecoder {
 
         self.byteReader = byteReader
 
-        let byte = self.byteReader.byte()
+        let byte = try self.byteReader.safeByte()
         self.code = self.byteReader.uint32().byteSwapped
         guard byte == 0 && self.code != self.range
             else { throw LZMAError.rangeDecoderInitError }
@@ -36,15 +36,15 @@ struct LZMARangeDecoder {
     }
 
     /// `range` property cannot be smaller than `(1 << 24)`. This function keeps it bigger.
-    mutating func normalize() {
+    mutating func normalize() throws {
         if self.range < LZMAConstants.topValue {
             self.range <<= 8
-            self.code = (self.code << 8) | UInt32(byteReader.byte())
+            self.code = (self.code << 8) | UInt32(try byteReader.safeByte())
         }
     }
 
     /// Decodes sequence of direct bits (binary symbols with fixed and equal probabilities).
-    mutating func decode(directBits: Int) -> Int {
+    mutating func decode(directBits: Int) throws -> Int {
         var res: UInt32 = 0
         var count = directBits
         repeat {
@@ -57,7 +57,7 @@ struct LZMARangeDecoder {
                 self.isCorrupted = true
             }
 
-            self.normalize()
+            try self.normalize()
 
             res <<= 1
             res = res &+ (t &+ 1)
@@ -67,7 +67,7 @@ struct LZMARangeDecoder {
     }
 
     /// Decodes binary symbol (bit) with predicted (estimated) probability.
-    mutating func decode(bitWithProb prob: inout Int) -> Int {
+    mutating func decode(bitWithProb prob: inout Int) throws -> Int {
         let bound = (self.range >> UInt32(LZMAConstants.numBitModelTotalBits)) * UInt32(prob)
         let symbol: Int
         if self.code < bound {
@@ -80,7 +80,7 @@ struct LZMARangeDecoder {
             self.range -= bound
             symbol = 1
         }
-        self.normalize()
+        try self.normalize()
         return symbol
     }
 

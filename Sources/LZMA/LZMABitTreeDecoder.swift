@@ -17,26 +17,26 @@ struct LZMABitTreeDecoder {
         self.numBits = numBits
     }
 
-    mutating func decode(with rangeDecoder: inout LZMARangeDecoder) -> Int {
+    mutating func decode(with rangeDecoder: inout LZMARangeDecoder) throws -> Int {
         var m = 1
         for _ in 0..<self.numBits {
-            m = (m << 1) + rangeDecoder.decode(bitWithProb: &self.probs[m])
+            m = (m << 1) + (try rangeDecoder.decode(bitWithProb: &self.probs[m]))
         }
         return m - (1 << self.numBits)
     }
 
-    mutating func reverseDecode(with rangeDecoder: inout LZMARangeDecoder) -> Int {
-        return LZMABitTreeDecoder.bitTreeReverseDecode(probs: &self.probs,
+    mutating func reverseDecode(with rangeDecoder: inout LZMARangeDecoder) throws -> Int {
+        return try LZMABitTreeDecoder.bitTreeReverseDecode(probs: &self.probs,
                                                        startIndex: 0,
                                                        bits: self.numBits, &rangeDecoder)
     }
 
     static func bitTreeReverseDecode(probs: inout [Int], startIndex: Int, bits: Int,
-                                     _ rangeDecoder: inout LZMARangeDecoder) -> Int {
+                                     _ rangeDecoder: inout LZMARangeDecoder) throws -> Int {
         var m = 1
         var symbol = 0
         for i in 0..<bits {
-            let bit = rangeDecoder.decode(bitWithProb: &probs[startIndex + m])
+            let bit = try rangeDecoder.decode(bitWithProb: &probs[startIndex + m])
             m <<= 1
             m += bit
             symbol |= bit << i

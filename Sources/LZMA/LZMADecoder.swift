@@ -117,7 +117,7 @@ struct LZMADecoder {
             }
 
             let posState = out.count & ((1 << pb) - 1)
-            if rangeDecoder.decode(bitWithProb:
+            if try rangeDecoder.decode(bitWithProb:
                 &probabilities[(state << LZMAConstants.numPosBitsMax) + posState]) == 0 {
                 if uncompressedSize == 0 {
                     throw LZMAError.exceededUncompressedSize
@@ -145,7 +145,7 @@ struct LZMADecoder {
                     repeat {
                         let matchBit = ((matchByte >> 7) & 1).toInt()
                         matchByte <<= 1
-                        let bit = rangeDecoder.decode(bitWithProb:
+                        let bit = try rangeDecoder.decode(bitWithProb:
                             &literalProbs[litState][((1 + matchBit) << 8) + symbol])
                         symbol = (symbol << 1) | bit
                         if matchBit != bit {
@@ -154,7 +154,7 @@ struct LZMADecoder {
                     } while symbol < 0x100
                 }
                 while symbol < 0x100 {
-                    symbol = (symbol << 1) | rangeDecoder.decode(bitWithProb: &literalProbs[litState][symbol])
+                    symbol = (symbol << 1) | (try rangeDecoder.decode(bitWithProb: &literalProbs[litState][symbol]))
                 }
                 let byte = (symbol - 0x100).toUInt8()
                 uncompressedSize -= 1
@@ -174,7 +174,7 @@ struct LZMADecoder {
             }
 
             var len: Int
-            if rangeDecoder.decode(bitWithProb: &probabilities[193 + state]) != 0 {
+            if try rangeDecoder.decode(bitWithProb: &probabilities[193 + state]) != 0 {
                 // REP MATCH CASE
                 if uncompressedSize == 0 {
                     throw LZMAError.exceededUncompressedSize
@@ -182,9 +182,9 @@ struct LZMADecoder {
                 if dictEnd == dictStart {
                     throw LZMAError.windowIsEmpty
                 }
-                if rangeDecoder.decode(bitWithProb: &probabilities[205 + state]) == 0 {
+                if try rangeDecoder.decode(bitWithProb: &probabilities[205 + state]) == 0 {
                     // (We use last distance from 'distance history table').
-                    if rangeDecoder.decode(bitWithProb:
+                    if try rangeDecoder.decode(bitWithProb:
                         &probabilities[241 + (state << LZMAConstants.numPosBitsMax) + posState]) == 0 {
                         // SHORT REP MATCH CASE
                         state = state < 7 ? 9 : 11
@@ -198,10 +198,10 @@ struct LZMADecoder {
                     // So the following code selectes one distance from history...
                     // based on the binary data.
                     let dist: Int
-                    if rangeDecoder.decode(bitWithProb: &probabilities[217 + state]) == 0 {
+                    if try rangeDecoder.decode(bitWithProb: &probabilities[217 + state]) == 0 {
                         dist = rep1
                     } else {
-                        if rangeDecoder.decode(bitWithProb: &probabilities[229 + state]) == 0 {
+                        if try rangeDecoder.decode(bitWithProb: &probabilities[229 + state]) == 0 {
                             dist = rep2
                         } else {
                             dist = rep3
@@ -212,14 +212,14 @@ struct LZMADecoder {
                     rep1 = rep0
                     rep0 = dist
                 }
-                len = repLenDecoder.decode(with: &rangeDecoder, posState: posState)
+                len = try repLenDecoder.decode(with: &rangeDecoder, posState: posState)
                 state = state < 7 ? 8 : 11
             } else { // SIMPLE MATCH CASE
                 // First, we need to move history of distance values.
                 rep3 = rep2
                 rep2 = rep1
                 rep1 = rep0
-                len = lenDecoder.decode(with: &rangeDecoder, posState: posState)
+                len = try lenDecoder.decode(with: &rangeDecoder, posState: posState)
                 state = state < 7 ? 7 : 10
 
                 // DECODE DISTANCE:
@@ -230,7 +230,7 @@ struct LZMADecoder {
                 }
 
                 /// Defines decoding scheme for distance value.
-                let posSlot = posSlotDecoder[lenState].decode(with: &rangeDecoder)
+                let posSlot = try posSlotDecoder[lenState].decode(with: &rangeDecoder)
                 if posSlot < 4 {
                     // If `posSlot` is less than 4 then distance has defined value (no need to decode).
                     // And distance is actually equal to `posSlot`.
@@ -242,15 +242,15 @@ struct LZMADecoder {
                         // In this case we need a sequence of bits decoded with bit tree...
                         // ...(separate trees for different `posSlot` values)...
                         // ...and 'Reverse' scheme to get distance value.
-                        dist += LZMABitTreeDecoder.bitTreeReverseDecode(probs: &posDecoders,
+                        dist += try LZMABitTreeDecoder.bitTreeReverseDecode(probs: &posDecoders,
                                                                         startIndex: dist - posSlot,
                                                                         bits: numDirectBits, &rangeDecoder)
                     } else {
                         // Middle bits of distance are decoded as direct bits from RangeDecoder.
-                        dist += rangeDecoder.decode(directBits: (numDirectBits - LZMAConstants.numAlignBits))
+                        dist += try rangeDecoder.decode(directBits: (numDirectBits - LZMAConstants.numAlignBits))
                             << LZMAConstants.numAlignBits
                         // Low 4 bits are decoded with a bit tree decoder (called 'AlignDecoder') using "Reverse" scheme.
-                        dist += alignDecoder.reverseDecode(with: &rangeDecoder)
+                        dist += try alignDecoder.reverseDecode(with: &rangeDecoder)
                     }
                     rep0 = dist
                 }
